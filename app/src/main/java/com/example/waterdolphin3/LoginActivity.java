@@ -4,8 +4,10 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Intent;
 import android.graphics.Color;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.text.util.Linkify;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
@@ -15,7 +17,15 @@ import android.widget.EditText;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -63,13 +73,28 @@ TextView tvLostPw, tvJoin;
             @Override
             public void onClick(View v) {
                 int colorPrimary = getResources().getColor(R.color.colorPrimary);
-                btnLogin.setBackgroundColor(colorPrimary);
+                //btnLogin.setBackgroundColor(colorPrimary);
 
-                //서버 연동하면 수정 부탁
-                Intent intent = new Intent(getApplicationContext(), MainActivity.class);
-                startActivity(intent);
-                finish();
 
+                String loginid = edtEmail.getText().toString();
+                String loginpwd = edtPassword.getText().toString();
+                try {
+                    String result  = new CustomTask().execute(loginid,loginpwd,"login").get();
+                    if(result.equals("true")) {
+                        Toast.makeText(LoginActivity.this,"로그인",Toast.LENGTH_SHORT).show();
+                        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                        startActivity(intent);
+                        finish();
+                    } else if(result.equals("false")) {
+                        Toast.makeText(LoginActivity.this,"아이디 or 비밀번호가 다름",Toast.LENGTH_SHORT).show();
+                        edtEmail.setText("");
+                        edtPassword.setText("");
+                    } else if(result.equals("noId")) {
+                        Toast.makeText(LoginActivity.this,"존재하지 않는 아이디",Toast.LENGTH_SHORT).show();
+                        edtEmail.setText("");
+                        edtPassword.setText("");
+                    }
+                }catch (Exception e) {}
             }
         });
 
@@ -97,5 +122,40 @@ TextView tvLostPw, tvJoin;
 
         Linkify.addLinks(tvLostPw, pattern1, "http://www.naver.com/", null, mTransform);
         Linkify.addLinks(tvJoin, pattern2, "http://www.naver.com/", null, mTransform);
+    }//OnCreate
+    class CustomTask extends AsyncTask<String, Void, String> {
+        String sendMsg, receiveMsg;
+        @Override
+        protected String doInBackground(String... strings) {
+            try {
+                String str;
+                URL url = new URL("http://192.168.0.100:8080/water/data.jsp");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+                conn.setRequestMethod("POST");
+                OutputStreamWriter osw = new OutputStreamWriter(conn.getOutputStream());
+                sendMsg = "id="+strings[0]+"&pwd="+strings[1]+"&type="+strings[2];
+                osw.write(sendMsg);
+                osw.flush();
+                if(conn.getResponseCode() == conn.HTTP_OK) {
+                    InputStreamReader tmp = new InputStreamReader(conn.getInputStream(), "UTF-8");
+                    BufferedReader reader = new BufferedReader(tmp);
+                    StringBuffer buffer = new StringBuffer();
+                    while ((str = reader.readLine()) != null) {
+                        buffer.append(str);
+                    }
+                    receiveMsg = buffer.toString();
+
+                } else {
+                    Log.i("통신 결과", conn.getResponseCode()+"에러");
+                }
+
+            } catch (MalformedURLException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return receiveMsg;
+        }
     }
 }
